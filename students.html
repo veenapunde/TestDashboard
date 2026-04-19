@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Students – Student Progress System</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="overlay" id="overlay"></div>
+<div class="app-container">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>🎓 Student Tracker</h2>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Main</div>
+      <a href="dashboard.html"   class="nav-item">📊 Dashboard</a>
+      <a href="students.html"    class="nav-item active">👨‍🎓 Students</a>
+      <a href="courses.html"     class="nav-item">📚 Courses</a>
+      <div class="sidebar-section-label">Management</div>
+      <a href="enrollments.html" class="nav-item">📝 Enrollments</a>
+      <a href="progress.html"    class="nav-item">📈 Progress</a>
+      <a href="attendance.html"  class="nav-item">✅ Attendance</a>
+      <div class="sidebar-section-label">Insights</div>
+      <a href="analytics.html"   class="nav-item">📉 Analytics</a>
+      <a href="colleges.html"    class="nav-item">🏛️ Colleges</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="name">Admin</div>
+          <div class="role">Administrator</div>
+        </div>
+      </div>
+      <button type="button" id="logoutBtn" class="btn btn-ghost btn-block">🚪 Logout</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+        <h1>👨‍🎓 Students</h1>
+      </div>
+      <div class="top-bar-right">
+        <button type="button" id="addStudentBtn" class="btn btn-primary">+ Add Student</button>
+      </div>
+    </header>
+
+    <div class="content-section">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search students by name, email, college…"/>
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Name</th><th>Email</th>
+              <th>Phone</th><th>College</th><th>Enrolled</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="studentsTableBody">
+            <tr><td colspan="7" class="text-center loading">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div id="studentModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitle">Add Student</h2>
+      <button type="button" class="close-btn" id="closeModal">&times;</button>
+    </div>
+    <form id="studentForm">
+      <input type="hidden" id="studentId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name *</label>
+          <input type="text" id="studentName" placeholder="e.g. Vivek Sharma" required/>
+        </div>
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="text" id="studentPhone" placeholder="e.g. 9836357283"/>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:4px;">
+        <label>Email *</label>
+        <input type="email" id="studentEmail" placeholder="e.g. vivek@gmail.com" required/>
+        <div class="field-error" id="emailError">⚠️ This email is already registered.</div>
+      </div>
+      <div class="form-group" style="margin-top:4px;">
+        <label>College</label>
+        <select id="studentCollege">
+          <option value="">— Select College —</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top:4px;margin-bottom:20px;">
+        <label>Enrollment Date</label>
+        <input type="date" id="enrollmentDate"/>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">💾 Save Student</button>
+    </form>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  function getStudents()     { return JSON.parse(localStorage.getItem('sps_students') || '[]'); }
+  function saveStudents(arr) { localStorage.setItem('sps_students', JSON.stringify(arr)); }
+  function getColleges()     { return JSON.parse(localStorage.getItem('sps_colleges') || '[]'); }
+  function nextId(arr)       { return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1; }
+  function escHtml(s)        { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function showToast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  function fillCollegeDropdown(selected = '') {
+    const sel = document.getElementById('studentCollege');
+    const colleges = getColleges();
+    sel.innerHTML = '<option value="">— Select College —</option>';
+    colleges.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.college_name; o.textContent = c.college_name;
+      if (c.college_name === selected) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (selected && !colleges.find(c => c.college_name === selected)) {
+      const o = document.createElement('option');
+      o.value = selected; o.textContent = selected; o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+
+  function loadStudents() {
+    const tbody = document.getElementById('studentsTableBody');
+    const students = getStudents();
+    if (!students.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center">No students found. Add one above!</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    [...students].reverse().forEach(s => {
+      const initials = s.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+      const enrolled = s.enrollment_date
+        ? new Date(s.enrollment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text-muted);font-size:12px;">#${s.id}</td>
+        <td><div class="name-cell"><div class="avatar-sm">${initials}</div><strong>${escHtml(s.name)}</strong></div></td>
+        <td style="color:var(--primary-light);font-size:12.5px;">${escHtml(s.email)}</td>
+        <td>${s.phone ? escHtml(s.phone) : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${s.college ? escHtml(s.college) : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${enrolled}</td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="btn btn-sm btn-edit" onclick="editStudent(${s.id})" style="margin-right:5px;">✏️ Edit</button>
+          <button type="button" class="btn btn-sm btn-danger" onclick="deleteStudent(${s.id})">🗑 Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function openModal()  { document.getElementById('studentModal').classList.add('open'); }
+  function closeModal() { document.getElementById('studentModal').classList.remove('open'); }
+
+  document.getElementById('closeModal').addEventListener('click', closeModal);
+  document.getElementById('studentModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('studentModal')) closeModal();
+  });
+
+  document.getElementById('addStudentBtn').addEventListener('click', () => {
+    document.getElementById('studentId').value = '';
+    document.getElementById('studentForm').reset();
+    document.getElementById('emailError').style.display = 'none';
+    document.getElementById('modalTitle').textContent = 'Add Student';
+    fillCollegeDropdown();
+    openModal();
+  });
+
+  window.editStudent = id => {
+    const s = getStudents().find(x => x.id === id);
+    if (!s) { showToast('Student not found', 'error'); return; }
+    document.getElementById('studentId').value      = s.id;
+    document.getElementById('studentName').value    = s.name;
+    document.getElementById('studentEmail').value   = s.email;
+    document.getElementById('studentPhone').value   = s.phone || '';
+    document.getElementById('enrollmentDate').value = s.enrollment_date || '';
+    document.getElementById('emailError').style.display = 'none';
+    document.getElementById('modalTitle').textContent   = 'Edit Student';
+    fillCollegeDropdown(s.college || '');
+    openModal();
+  };
+
+  window.deleteStudent = id => {
+    if (!confirm('Delete this student?')) return;
+    saveStudents(getStudents().filter(s => s.id !== id));
+    showToast('Student deleted ✅', 'success');
+    loadStudents();
+  };
+
+  document.getElementById('studentForm').addEventListener('submit', e => {
+    e.preventDefault();
+    document.getElementById('emailError').style.display = 'none';
+    const id = parseInt(document.getElementById('studentId').value) || null;
+    const payload = {
+      name:            document.getElementById('studentName').value.trim(),
+      email:           document.getElementById('studentEmail').value.trim().toLowerCase(),
+      phone:           document.getElementById('studentPhone').value.trim(),
+      college:         document.getElementById('studentCollege').value,
+      enrollment_date: document.getElementById('enrollmentDate').value || null,
+    };
+    let students = getStudents();
+    if (id) {
+      if (students.find(s => s.email === payload.email && s.id !== id)) {
+        document.getElementById('emailError').style.display = 'block'; return;
+      }
+      students = students.map(s => s.id === id ? { ...s, ...payload } : s);
+      saveStudents(students);
+      showToast('Student updated! ✅', 'success');
+    } else {
+      if (students.find(s => s.email === payload.email)) {
+        document.getElementById('emailError').style.display = 'block'; return;
+      }
+      students.push({ id: nextId(students), ...payload, created_at: new Date().toISOString() });
+      saveStudents(students);
+      showToast('Student added! ✅', 'success');
+    }
+    closeModal(); loadStudents();
+  });
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll('#studentsTableBody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
+
+  // Sidebar toggle
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  document.getElementById('hamburger').addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    overlay.classList.toggle('open', open);
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  });
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    if (confirm('Logout karna chahte ho?')) window.location.href = 'index.html';
+  });
+
+  loadStudents();
+</script>
+</body>
+</html>

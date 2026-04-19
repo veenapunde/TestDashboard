@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Analytics – Student Progress System</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="overlay" id="overlay"></div>
+<div class="app-container">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>🎓 Student Tracker</h2>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Main</div>
+      <a href="dashboard.html"   class="nav-item">📊 Dashboard</a>
+      <a href="students.html"    class="nav-item">👨‍🎓 Students</a>
+      <a href="courses.html"     class="nav-item">📚 Courses</a>
+      <div class="sidebar-section-label">Management</div>
+      <a href="enrollments.html" class="nav-item">📝 Enrollments</a>
+      <a href="progress.html"    class="nav-item">📈 Progress</a>
+      <a href="attendance.html"  class="nav-item">✅ Attendance</a>
+      <div class="sidebar-section-label">Insights</div>
+      <a href="analytics.html"   class="nav-item active">📉 Analytics</a>
+      <a href="colleges.html"    class="nav-item">🏛️ Colleges</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="name">Admin</div>
+          <div class="role">Administrator</div>
+        </div>
+      </div>
+      <button type="button" id="logoutBtn" class="btn btn-ghost btn-block">🚪 Logout</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+        <h1>📉 Analytics</h1>
+      </div>
+      <div class="top-bar-right">
+        <button type="button" id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+      </div>
+    </header>
+
+    <div class="content-section">
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">👨‍🎓</div>
+          <div class="stat-info"><h3>Total Students</h3><p id="totalStudents">0</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📚</div>
+          <div class="stat-info"><h3>Total Courses</h3><p id="totalCourses">0</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📈</div>
+          <div class="stat-info"><h3>Avg Progress</h3><p id="avgProgress">0%</p></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⏰</div>
+          <div class="stat-info"><h3>Total Hours</h3><p id="totalHours">0</p></div>
+        </div>
+      </div>
+
+      <!-- Low Progress -->
+      <div class="analytics-card">
+        <h3>🔴 Low Progress Students (&lt; 30%)</h3>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr><th>Student</th><th>Course</th><th>Progress</th><th>Hours</th><th>Last Activity</th></tr>
+            </thead>
+            <tbody id="lowProgressBody">
+              <tr><td colspan="5" class="text-center loading">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Inactive Students -->
+      <div class="analytics-card">
+        <h3>⏰ Inactive Students (30+ Days)</h3>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr><th>Student</th><th>Course</th><th>Last Activity</th><th>Days Inactive</th></tr>
+            </thead>
+            <tbody id="inactiveBody">
+              <tr><td colspan="4" class="text-center loading">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>📊 Performance by Course</h3>
+          <canvas id="performanceChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>📈 Progress Distribution</h3>
+          <canvas id="progressChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>📉 On Track vs At Risk</h3>
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  function getStudents()  { return JSON.parse(localStorage.getItem('sps_students')  || '[]'); }
+  function getCourses()   { return JSON.parse(localStorage.getItem('sps_courses')   || '[]'); }
+  function getProgress()  { return JSON.parse(localStorage.getItem('sps_progress')  || '[]'); }
+  function escHtml(s)     { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function showToast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  let perfChart, progChart, statusChart;
+
+  function loadAnalytics() {
+    const students = getStudents();
+    const courses  = getCourses();
+    const progress = getProgress();
+
+    // Stats
+    document.getElementById('totalStudents').textContent = students.length;
+    document.getElementById('totalCourses').textContent  = courses.length;
+    const totalHours = progress.reduce((s, p) => s + (p.learning_hours || 0), 0);
+    document.getElementById('totalHours').textContent = totalHours.toFixed(1);
+    const avg = progress.length
+      ? Math.round(progress.reduce((s, p) => s + (p.completion_percentage || 0), 0) / progress.length)
+      : 0;
+    document.getElementById('avgProgress').textContent = avg + '%';
+
+    // Low progress
+    const lowProgress = progress.filter(p => (p.completion_percentage || 0) < 30);
+    const lowBody = document.getElementById('lowProgressBody');
+    if (!lowProgress.length) {
+      lowBody.innerHTML = '<tr><td colspan="5" class="text-center">🎉 No low progress students!</td></tr>';
+    } else {
+      lowBody.innerHTML = lowProgress.map(p => {
+        const sName = (students.find(s => s.id === p.student_id) || {}).name || 'Unknown';
+        const cName = (courses.find(c => c.id === p.course_id)   || {}).course_name || 'Unknown';
+        const date  = p.last_activity_date
+          ? new Date(p.last_activity_date).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+          : '—';
+        return `<tr>
+          <td><strong>${escHtml(sName)}</strong></td>
+          <td><span class="badge badge-info">${escHtml(cName)}</span></td>
+          <td><span class="badge badge-danger">${p.completion_percentage || 0}%</span></td>
+          <td style="color:var(--text-muted);">${p.learning_hours || 0} hrs</td>
+          <td style="color:var(--text-muted);font-size:12px;">${date}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Inactive (no activity in 30+ days)
+    const today = new Date();
+    const inactive = progress.filter(p => {
+      if (!p.last_activity_date) return true;
+      const diff = (today - new Date(p.last_activity_date)) / (1000 * 60 * 60 * 24);
+      return diff >= 30;
+    });
+    const inactBody = document.getElementById('inactiveBody');
+    if (!inactive.length) {
+      inactBody.innerHTML = '<tr><td colspan="4" class="text-center">✅ All students are active!</td></tr>';
+    } else {
+      inactBody.innerHTML = inactive.map(p => {
+        const sName = (students.find(s => s.id === p.student_id) || {}).name || 'Unknown';
+        const cName = (courses.find(c => c.id === p.course_id)   || {}).course_name || 'Unknown';
+        const daysInactive = p.last_activity_date
+          ? Math.floor((today - new Date(p.last_activity_date)) / (1000 * 60 * 60 * 24))
+          : '—';
+        const date = p.last_activity_date
+          ? new Date(p.last_activity_date).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+          : 'Never';
+        return `<tr>
+          <td><strong>${escHtml(sName)}</strong></td>
+          <td><span class="badge badge-info">${escHtml(cName)}</span></td>
+          <td style="color:var(--text-muted);font-size:12px;">${date}</td>
+          <td><span class="badge badge-warning">${daysInactive} days</span></td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Charts
+    const dist = { high: 0, medium: 0, low: 0 };
+    progress.forEach(p => {
+      const pct = p.completion_percentage || 0;
+      if (pct >= 70) dist.high++;
+      else if (pct >= 30) dist.medium++;
+      else dist.low++;
+    });
+
+    // Per-course average
+    const perfMap = {};
+    courses.forEach(c => { perfMap[c.id] = { name: c.course_name, total: 0, count: 0 }; });
+    progress.forEach(p => {
+      if (perfMap[p.course_id]) {
+        perfMap[p.course_id].total += (p.completion_percentage || 0);
+        perfMap[p.course_id].count++;
+      }
+    });
+    const perfData = Object.values(perfMap).filter(c => c.count > 0);
+
+    const chartOpts = {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a1a2e', borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1 } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 11 }, callback: v => v + '%' }, max: 100, beginAtZero: true }
+      }
+    };
+
+    if (perfChart) perfChart.destroy();
+    perfChart = new Chart(document.getElementById('performanceChart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: perfData.length ? perfData.map(c => c.name) : ['No Data'],
+        datasets: [{
+          data: perfData.length ? perfData.map(c => Math.round(c.total / c.count)) : [0],
+          backgroundColor: 'rgba(99,102,241,0.5)',
+          borderColor: '#6366f1', borderWidth: 1.5, borderRadius: 6
+        }]
+      },
+      options: chartOpts
+    });
+
+    if (progChart) progChart.destroy();
+    progChart = new Chart(document.getElementById('progressChart').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: ['High (≥70%)', 'Medium (30–70%)', 'Low (<30%)'],
+        datasets: [{ data: [dist.high, dist.medium, dist.low], backgroundColor: ['#10b981','#f59e0b','#ef4444'], borderWidth: 0 }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } } } }
+    });
+
+    if (statusChart) statusChart.destroy();
+    statusChart = new Chart(document.getElementById('statusChart').getContext('2d'), {
+      type: 'pie',
+      data: {
+        labels: ['On Track (≥30%)', 'At Risk (<30%)'],
+        datasets: [{ data: [dist.high + dist.medium, dist.low], backgroundColor: ['#14b8a6','#ef4444'], borderWidth: 0 }]
+      },
+      options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } } } }
+    });
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', loadAnalytics);
+
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  document.getElementById('hamburger').addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    overlay.classList.toggle('open', open);
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  });
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    if (confirm('Logout karna chahte ho?')) window.location.href = 'index.html';
+  });
+
+  loadAnalytics();
+</script>
+</body>
+</html>

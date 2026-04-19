@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Colleges – Student Progress System</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="overlay" id="overlay"></div>
+<div class="app-container">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>🎓 Student Tracker</h2>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Main</div>
+      <a href="dashboard.html"   class="nav-item">📊 Dashboard</a>
+      <a href="students.html"    class="nav-item">👨‍🎓 Students</a>
+      <a href="courses.html"     class="nav-item">📚 Courses</a>
+      <div class="sidebar-section-label">Management</div>
+      <a href="enrollments.html" class="nav-item">📝 Enrollments</a>
+      <a href="progress.html"    class="nav-item">📈 Progress</a>
+      <a href="attendance.html"  class="nav-item">✅ Attendance</a>
+      <div class="sidebar-section-label">Insights</div>
+      <a href="analytics.html"   class="nav-item">📉 Analytics</a>
+      <a href="colleges.html"    class="nav-item active">🏛️ Colleges</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="name">Admin</div>
+          <div class="role">Administrator</div>
+        </div>
+      </div>
+      <button type="button" id="logoutBtn" class="btn btn-ghost btn-block">🚪 Logout</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+        <h1>🏛️ Colleges</h1>
+      </div>
+      <div class="top-bar-right">
+        <button type="button" id="addCollegeBtn" class="btn btn-primary">+ Add College</button>
+      </div>
+    </header>
+
+    <div class="content-section">
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search colleges…"/>
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>College Name</th><th>Location</th>
+              <th>Contact Email</th><th>Est. Year</th><th>Students</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="collegesTableBody">
+            <tr><td colspan="7" class="text-center loading">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="collegeModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modalTitle">Add College</h2>
+      <button type="button" class="close-btn" id="closeAddModal">&times;</button>
+    </div>
+    <form id="collegeForm">
+      <input type="hidden" id="collegeId"/>
+      <div class="form-group">
+        <label>College Name *</label>
+        <input type="text" id="collegeName" placeholder="e.g. G H Raisoni Science & Technology" required/>
+      </div>
+      <div class="form-row" style="margin-top:4px;">
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" id="collegeLocation" placeholder="e.g. Nagpur, Maharashtra"/>
+        </div>
+        <div class="form-group">
+          <label>Established Year</label>
+          <input type="number" id="collegeYear" placeholder="e.g. 2006" min="1800" max="2100"/>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:4px;">
+        <label>Contact Email</label>
+        <input type="email" id="collegeEmail" placeholder="e.g. info@college.edu"/>
+      </div>
+      <div class="form-group" style="margin-top:4px;margin-bottom:20px;">
+        <label>Phone</label>
+        <input type="text" id="collegePhone" placeholder="e.g. 8773873626"/>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">💾 Save College</button>
+    </form>
+  </div>
+</div>
+
+<!-- View Modal -->
+<div id="viewModal" class="modal">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <h2>🏛️ College Details</h2>
+      <button type="button" class="close-btn" id="closeViewModal">&times;</button>
+    </div>
+    <div class="view-header">
+      <div class="college-icon">🏛️</div>
+      <div>
+        <div id="viewCollegeName" style="font-size:18px;font-weight:700;color:var(--text-primary);"></div>
+        <div class="view-meta" id="viewCollegeMeta"></div>
+      </div>
+    </div>
+    <div class="view-stats">
+      <div class="view-stat">
+        <div class="num" id="statTotal">0</div>
+        <div class="lbl">Total Students</div>
+      </div>
+      <div class="view-stat">
+        <div class="num" id="statYear" style="color:var(--warning);">—</div>
+        <div class="lbl">Established Year</div>
+      </div>
+    </div>
+    <div class="section-label">Students from this College</div>
+    <div class="student-list" id="viewStudentList">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  function getColleges()     { return JSON.parse(localStorage.getItem('sps_colleges') || '[]'); }
+  function saveColleges(arr) { localStorage.setItem('sps_colleges', JSON.stringify(arr)); }
+  function getStudents()     { return JSON.parse(localStorage.getItem('sps_students') || '[]'); }
+  function nextId(arr)       { return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1; }
+  function escHtml(s)        { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function showToast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  function loadColleges() {
+    const tbody    = document.getElementById('collegesTableBody');
+    const colleges = getColleges();
+    const students = getStudents();
+    if (!colleges.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center">No colleges found. Add one above!</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    [...colleges].reverse().forEach(col => {
+      const count = students.filter(s => s.college === col.college_name).length;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text-muted);font-size:12px;">#${col.id}</td>
+        <td><strong>${escHtml(col.college_name)}</strong></td>
+        <td>${col.location ? escHtml(col.location) : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${col.contact_email
+          ? `<span style="color:var(--primary-light);font-size:12.5px;">${escHtml(col.contact_email)}</span>`
+          : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td>${col.established_year
+          ? `<span class="badge badge-warning">${col.established_year}</span>`
+          : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td><span class="badge badge-info">${count} students</span></td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="btn btn-sm btn-purple" onclick="viewCollege(${col.id})" style="margin-right:4px;">👁 View</button>
+          <button type="button" class="btn btn-sm btn-edit"   onclick="editCollege(${col.id})" style="margin-right:4px;">✏️ Edit</button>
+          <button type="button" class="btn btn-sm btn-danger" onclick="deleteCollege(${col.id})">🗑 Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function openModal(id)  { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.getElementById('closeAddModal').addEventListener('click',  () => closeModal('collegeModal'));
+  document.getElementById('closeViewModal').addEventListener('click', () => closeModal('viewModal'));
+  document.getElementById('collegeModal').addEventListener('click', e => { if (e.target === document.getElementById('collegeModal')) closeModal('collegeModal'); });
+  document.getElementById('viewModal').addEventListener('click',    e => { if (e.target === document.getElementById('viewModal'))    closeModal('viewModal'); });
+
+  document.getElementById('addCollegeBtn').addEventListener('click', () => {
+    document.getElementById('collegeId').value = '';
+    document.getElementById('collegeForm').reset();
+    document.getElementById('modalTitle').textContent = 'Add College';
+    openModal('collegeModal');
+  });
+
+  window.editCollege = id => {
+    const col = getColleges().find(c => c.id === id);
+    if (!col) { showToast('College not found', 'error'); return; }
+    document.getElementById('collegeId').value       = col.id;
+    document.getElementById('collegeName').value     = col.college_name;
+    document.getElementById('collegeLocation').value = col.location || '';
+    document.getElementById('collegeYear').value     = col.established_year || '';
+    document.getElementById('collegeEmail').value    = col.contact_email || '';
+    document.getElementById('collegePhone').value    = col.phone || '';
+    document.getElementById('modalTitle').textContent = 'Edit College';
+    openModal('collegeModal');
+  };
+
+  window.deleteCollege = id => {
+    const col = getColleges().find(c => c.id === id);
+    if (!confirm(`Delete "${col?.college_name}"?`)) return;
+    saveColleges(getColleges().filter(c => c.id !== id));
+    showToast('College deleted ✅', 'success');
+    loadColleges();
+  };
+
+  document.getElementById('collegeForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const id = parseInt(document.getElementById('collegeId').value) || null;
+    const payload = {
+      college_name:     document.getElementById('collegeName').value.trim(),
+      location:         document.getElementById('collegeLocation').value.trim(),
+      established_year: parseInt(document.getElementById('collegeYear').value) || null,
+      contact_email:    document.getElementById('collegeEmail').value.trim(),
+      phone:            document.getElementById('collegePhone').value.trim(),
+    };
+    let colleges = getColleges();
+    if (id) {
+      colleges = colleges.map(c => c.id === id ? { ...c, ...payload } : c);
+      saveColleges(colleges);
+      showToast('College updated! ✅', 'success');
+    } else {
+      colleges.push({ id: nextId(colleges), ...payload, created_at: new Date().toISOString() });
+      saveColleges(colleges);
+      showToast('College added! ✅', 'success');
+    }
+    closeModal('collegeModal');
+    loadColleges();
+  });
+
+  window.viewCollege = id => {
+    const col = getColleges().find(c => c.id === id);
+    if (!col) return;
+    document.getElementById('viewCollegeName').textContent = col.college_name;
+    const parts = [];
+    if (col.location)      parts.push('📍 ' + col.location);
+    if (col.contact_email) parts.push('✉️ ' + col.contact_email);
+    if (col.phone)         parts.push('📞 ' + col.phone);
+    document.getElementById('viewCollegeMeta').textContent = parts.join('   ·   ') || 'No info available';
+    document.getElementById('statYear').textContent  = col.established_year || '—';
+    const students = getStudents().filter(s => s.college === col.college_name);
+    document.getElementById('statTotal').textContent = students.length;
+    const list = document.getElementById('viewStudentList');
+    if (!students.length) {
+      list.innerHTML = '<div class="empty-state">🏫 No students from this college yet.<br><small style="display:block;margin-top:6px;">Assign this college to students in the Students page.</small></div>';
+    } else {
+      list.innerHTML = students.map(s => {
+        const initials = s.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+        return `<div class="student-row">
+          <div class="s-avatar">${initials}</div>
+          <div class="s-info">
+            <div class="sname">${escHtml(s.name)}</div>
+            <div class="smeta">${escHtml(s.email)}${s.phone ? ' · ' + escHtml(s.phone) : ''}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+    openModal('viewModal');
+  };
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll('#collegesTableBody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
+
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  document.getElementById('hamburger').addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    overlay.classList.toggle('open', open);
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  });
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    if (confirm('Logout karna chahte ho?')) window.location.href = 'index.html';
+  });
+
+  loadColleges();
+</script>
+</body>
+</html>

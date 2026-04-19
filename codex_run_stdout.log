@@ -1,0 +1,20 @@
+✅ .env file found
+MySQL unavailable, switching to SQLite. Reason: (pymysql.err.OperationalError) (1045, "Access denied for user 'root'@'localhost' (using password: YES)")
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+🚀 Starting Student Progress Tracking System...
+🔌 Attempting to connect to MySQL database...
+✅ Database tables created or verified
+ℹ️  Admin already exists.
+✅ Database connection successful!
+🌐 Open http://localhost:5000 in your browser
+ * Serving Flask app 'run'
+ * Debug mode: on
+✅ .env file found
+MySQL unavailable, switching to SQLite. Reason: (pymysql.err.OperationalError) (1045, "Access denied for user 'root'@'localhost' (using password: YES)")
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+🚀 Starting Student Progress Tracking System...
+🔌 Attempting to connect to MySQL database...
+✅ Database tables created or verified
+ℹ️  Admin already exists.
+✅ Database connection successful!
+🌐 Open http://localhost:5000 in your browser

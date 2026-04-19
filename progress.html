@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Progress – Student Progress System</title>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="overlay" id="overlay"></div>
+<div class="app-container">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h2>🎓 Student Tracker</h2>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section-label">Main</div>
+      <a href="dashboard.html"   class="nav-item">📊 Dashboard</a>
+      <a href="students.html"    class="nav-item">👨‍🎓 Students</a>
+      <a href="courses.html"     class="nav-item">📚 Courses</a>
+      <div class="sidebar-section-label">Management</div>
+      <a href="enrollments.html" class="nav-item">📝 Enrollments</a>
+      <a href="progress.html"    class="nav-item active">📈 Progress</a>
+      <a href="attendance.html"  class="nav-item">✅ Attendance</a>
+      <div class="sidebar-section-label">Insights</div>
+      <a href="analytics.html"   class="nav-item">📉 Analytics</a>
+      <a href="colleges.html"    class="nav-item">🏛️ Colleges</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">A</div>
+        <div class="sidebar-user-info">
+          <div class="name">Admin</div>
+          <div class="role">Administrator</div>
+        </div>
+      </div>
+      <button type="button" id="logoutBtn" class="btn btn-ghost btn-block">🚪 Logout</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+        <h1>📈 Progress</h1>
+      </div>
+      <div class="top-bar-right">
+        <button type="button" id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+      </div>
+    </header>
+
+    <div class="content-section">
+      <!-- Progress Form -->
+      <div class="progress-form-card">
+        <h3>📝 Update Student Progress</h3>
+        <form id="progressForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Select Student</label>
+              <select id="studentSelect" required>
+                <option value="">— Choose Student —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Select Course</label>
+              <select id="courseSelect" required>
+                <option value="">— Choose Course —</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:4px;">
+            <div class="form-group">
+              <label>Completion % (0–100)</label>
+              <input type="number" id="completionPct" min="0" max="100" placeholder="e.g. 75" required/>
+            </div>
+            <div class="form-group">
+              <label>Learning Hours</label>
+              <input type="number" id="learningHours" min="0" placeholder="e.g. 12"/>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:4px;max-width:240px;">
+            <label>Last Activity Date</label>
+            <input type="date" id="activityDate"/>
+          </div>
+          <div class="form-actions" style="margin-top:12px;">
+            <button type="submit" class="btn btn-primary">💾 Save Progress</button>
+            <button type="reset"  class="btn btn-secondary">Reset</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- History -->
+      <div class="progress-history-card">
+        <h3>📋 Progress Records</h3>
+        <div class="search-bar" style="margin-bottom:14px;">
+          <input type="text" id="searchInput" placeholder="Search progress records…"/>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr><th>Student</th><th>Course</th><th>Progress</th><th>Hours</th><th>Last Activity</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="progressTableBody">
+              <tr><td colspan="6" class="text-center loading">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  function getStudents()    { return JSON.parse(localStorage.getItem('sps_students') || '[]'); }
+  function getCourses()     { return JSON.parse(localStorage.getItem('sps_courses')  || '[]'); }
+  function getProgress()    { return JSON.parse(localStorage.getItem('sps_progress') || '[]'); }
+  function saveProgress(a)  { localStorage.setItem('sps_progress', JSON.stringify(a)); }
+  function nextId(arr)      { return arr.length ? Math.max(...arr.map(x => x.id)) + 1 : 1; }
+  function escHtml(s)       { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function showToast(msg, type = 'success') {
+    const c = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+  }
+
+  function fillDropdowns() {
+    const ssel = document.getElementById('studentSelect');
+    const csel = document.getElementById('courseSelect');
+    ssel.innerHTML = '<option value="">— Choose Student —</option>';
+    csel.innerHTML = '<option value="">— Choose Course —</option>';
+    getStudents().forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = `${s.name} (${s.email})`;
+      ssel.appendChild(o);
+    });
+    getCourses().forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.course_name;
+      csel.appendChild(o);
+    });
+  }
+
+  function pctBadge(pct) {
+    const cls = pct >= 70 ? 'badge-success' : pct >= 30 ? 'badge-warning' : 'badge-danger';
+    return `<span class="badge ${cls}">${pct}%</span>`;
+  }
+
+  function loadProgress() {
+    const tbody    = document.getElementById('progressTableBody');
+    const progress = getProgress();
+    const students = getStudents();
+    const courses  = getCourses();
+    if (!progress.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">No progress records yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    [...progress].reverse().forEach(p => {
+      const sName = (students.find(s => s.id === p.student_id) || {}).name || 'Unknown';
+      const cName = (courses.find(c => c.id === p.course_id)   || {}).course_name || 'Unknown';
+      const date  = p.last_activity_date
+        ? new Date(p.last_activity_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${escHtml(sName)}</strong></td>
+        <td><span class="badge badge-info">${escHtml(cName)}</span></td>
+        <td>${pctBadge(p.completion_percentage || 0)}</td>
+        <td style="color:var(--text-muted);">${p.learning_hours || 0} hrs</td>
+        <td style="color:var(--text-muted);font-size:12px;">${date}</td>
+        <td>
+          <button type="button" class="btn btn-sm btn-danger" onclick="deleteProgress(${p.id})">🗑 Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('progressForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const studentId = parseInt(document.getElementById('studentSelect').value);
+    const courseId  = parseInt(document.getElementById('courseSelect').value);
+    const pct       = parseInt(document.getElementById('completionPct').value);
+    const hours     = parseFloat(document.getElementById('learningHours').value) || 0;
+    const date      = document.getElementById('activityDate').value || new Date().toISOString().split('T')[0];
+    if (!studentId || !courseId) { showToast('Please select student and course', 'error'); return; }
+    if (isNaN(pct) || pct < 0 || pct > 100) { showToast('Completion must be 0–100', 'error'); return; }
+
+    let progress = getProgress();
+    const existing = progress.find(p => p.student_id === studentId && p.course_id === courseId);
+    if (existing) {
+      existing.completion_percentage = pct;
+      existing.learning_hours        = hours;
+      existing.last_activity_date    = date;
+      showToast('Progress updated! ✅', 'success');
+    } else {
+      progress.push({ id: nextId(progress), student_id: studentId, course_id: courseId,
+        completion_percentage: pct, learning_hours: hours, last_activity_date: date });
+      showToast('Progress saved! ✅', 'success');
+    }
+    saveProgress(progress);
+    document.getElementById('progressForm').reset();
+    loadProgress();
+  });
+
+  window.deleteProgress = id => {
+    if (!confirm('Delete this progress record?')) return;
+    saveProgress(getProgress().filter(p => p.id !== id));
+    showToast('Record deleted ✅', 'success');
+    loadProgress();
+  };
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll('#progressTableBody tr').forEach(row => {
+      row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+    });
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', () => { fillDropdowns(); loadProgress(); });
+  document.getElementById('activityDate').value = new Date().toISOString().split('T')[0];
+
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('overlay');
+  document.getElementById('hamburger').addEventListener('click', () => {
+    const open = sidebar.classList.toggle('open');
+    overlay.classList.toggle('open', open);
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  });
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    if (confirm('Logout karna chahte ho?')) window.location.href = 'index.html';
+  });
+
+  fillDropdowns();
+  loadProgress();
+</script>
+</body>
+</html>
